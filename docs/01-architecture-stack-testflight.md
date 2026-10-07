@@ -543,7 +543,16 @@ The paid membership is only required for TestFlight, App Store Connect, MusicKit
 
 The `.dev` identifiers keep the real IDs unclaimed, so the paid team can register them cleanly. Switching modes is a one-line change; no code changes.
 
-**Requirement**: a Mac that runs Xcode 26. Everything above assumes one.
+**Requirement**: a Mac that runs Xcode 26 or later. Everything above assumes one.
+
+| Your Mac runs | Install | Notes |
+| --- | --- | --- |
+| macOS Tahoe 26.6 or later | **Xcode 27** (current, Mac App Store) | Preferred. Builds with the iOS 27 SDK while still deploying to iOS 26 |
+| macOS Tahoe 26.0 to 26.5 | Update macOS, then Xcode 27 | Software Update is free |
+| macOS Sequoia 15.6 or later, cannot upgrade to Tahoe | **Xcode 26.3** from developer.apple.com/download/all (free Apple ID) | Last Xcode that runs on Sequoia; fully sufficient for this project |
+| Older than Sequoia 15.6 | Not supported | Needs a newer Mac (or a rented cloud Mac) |
+
+Plan on at least 40 GB of free disk space for Xcode, the iOS simulator runtime, and build caches.
 
 ---
 
