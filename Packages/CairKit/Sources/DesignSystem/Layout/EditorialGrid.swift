@@ -39,7 +39,7 @@ public struct EditorialGridOverlay: View {
 
     public var body: some View {
         let grid = EditorialGrid.standard(for: layout)
-        let showsMarks = showsMarks
+        let drawsMarks = self.showsMarks
         Canvas { context, size in
             var lines = Path()
             for x in grid.columnEdges(in: size.width) {
@@ -48,7 +48,7 @@ public struct EditorialGridOverlay: View {
             }
             context.stroke(lines, with: .color(CairColor.gridLine), lineWidth: CairStroke.hairline)
 
-            guard showsMarks else { return }
+            guard drawsMarks else { return }
             let inset = grid.margin
             let arm: CGFloat = 6
             var marks = Path()

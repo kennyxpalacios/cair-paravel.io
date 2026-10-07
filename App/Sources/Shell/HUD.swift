@@ -62,7 +62,7 @@ struct HUDButtonCluster: View {
                     HUDIconButton(symbol: panel.symbol, label: panel.title, isActive: model.panel == panel) {
                         model.toggle(panel)
                     }
-                    .keyboardShortcut(panel == .chronicles ? "1" : "2", modifiers: .command)
+                    .keyboardShortcut(KeyEquivalent(panel == .chronicles ? "1" : "2"), modifiers: .command)
                 }
                 #if DEBUG
                 HUDIconButton(symbol: "wrench.and.screwdriver", label: "Workshop", isActive: false) {
