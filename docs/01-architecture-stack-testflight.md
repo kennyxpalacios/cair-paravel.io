@@ -1,8 +1,9 @@
 # Cair Paravel · Phase 1: Architecture, Stack & TestFlight Pipeline
 
-Status: **Proposed, awaiting approval**
+Status: **Decisions recorded (Revision 3), awaiting explicit go for Phase 2**
 Date: 2026-10-07
 Revision 2: scope widened from iPad-only to a universal iPhone + iPad app (new section 2.9; updates to 1.x, 2.4, 2.6, 2.8, 3.1, 4.x, 5.x, 8, 9).
+Revision 3: decisions recorded (section 9). Screening Room kept, figure-first Tumnus direction (2.7), iCloud sync on (2.5, 4.x, 5.x), iPad leads design, public-repo rules (6).
 Scope: Platform decision, module architecture, background audio and streaming constraints, project configuration, entitlements, signing, and the TestFlight pipeline. No product code ships in this phase.
 
 ---
@@ -17,14 +18,16 @@ Scope: Platform decision, module architecture, background audio and streaming co
 | Layout | Driven by **available space**, not device type: a compact layout (iPhone, and iPad in narrow windows) and a regular layout (iPad full screen and wide windows) |
 | Rendering | SwiftUI `MeshGradient`, `Canvas` + `TimelineView`, Metal shaders through `ShaderLibrary`, Liquid Glass (`glassEffect`). `MTKView` only if profiling demands it |
 | State | Swift Observation (`@Observable`), main-actor stores, timer engine as a pure, effect-returning state machine |
-| Persistence | SwiftData for The Chronicles (CloudKit-compatible schema), small Codable snapshot in an App Group for live session state |
+| Persistence | SwiftData for The Chronicles with **iCloud (CloudKit) sync** across iPhone and iPad; small Codable snapshot in an App Group for live session state |
 | Timer reliability | Wall-clock anchors, never tick counting. Local notifications (Time Sensitive) plus a Lock Screen Live Activity for phase ends |
 | Primary music | **Apple MusicKit** |
 | Secondary music | **Spotify by deep link** (no SDK) by default. The full App Remote SDK is capped at 5 users since Feb 2026 |
-| YouTube | **No headless player.** Only a visible, foreground "Screening Room" card, or cut entirely |
+| YouTube | **Screening Room**: a visible, foreground-only glass card using the official IFrame player. No headless or background playback |
+| Tumnus | **Figure-first faun** fused from the references: layered 2D rig with ink and watercolor shaders, lit by a mood-driven aura |
 | Owned audio | `AVAudioEngine` ambience engine (forest, hearth, rain stems) with background audio mode |
 | Project generation | **XcodeGen** (`project.yml` is the source of truth, `.xcodeproj` is generated) |
-| CI / TestFlight | **Xcode Cloud** archive → TestFlight internal. GitHub Actions macOS job as a compile gate |
+| CI / TestFlight | **Xcode Cloud** archive → TestFlight internal. GitHub Actions macOS job as a compile gate (free: the repo is public) |
+| Design lead | **iPad** is the hero canvas; the compact iPhone layout is a first-class adaptation |
 
 ---
 
@@ -179,9 +182,12 @@ Both systems suspend an app seconds after it leaves the foreground (on iPhone th
 ### 2.5 Persistence: The Chronicles
 
 - **SwiftData**, `VersionedSchema` v1 plus a `SchemaMigrationPlan` from the first commit.
-- **CloudKit-compatible schema** even if sync ships later: every attribute optional or defaulted, no `@Attribute(.unique)`, optional inverse relationships. Flipping on iCloud sync later becomes a capability change, not a migration.
+- **iCloud sync is on (decided)**: SwiftData's CloudKit integration against the private database in container `iCloud.io.cairparavel.app`, so The Chronicles follow the user between iPhone and iPad. Sync is live before the first TestFlight build.
+- **CloudKit schema rules** from the first model: every attribute optional or defaulted, no `@Attribute(.unique)`, all relationships optional with inverses.
+- **Conflict-light by design**: each Expedition or Tea Time is an append-only fact created on one device, so merges rarely collide. Presets and shared preferences sync through the same store; device-specific settings (quality tier, haptics, orientation) stay local in `UserDefaults`.
+- **Signed out of iCloud**: the store works locally and syncs once the user signs in. Nothing in the UI depends on sync having completed.
 - Records store facts (start, end, planned, focused seconds, outcome, wander events, optional intention). Streaks are **computed**, not stored, by a pure `StreakCalculator` in `CairCore` with grace-day rules, so streak policy can change without data migration and never punishes a single missed day.
-- **Live session snapshot** (the current phase anchors) is a small Codable file in the App Group container, readable by the Live Activity extension and App Intents.
+- **Live session snapshot** (the current phase anchors) is a small Codable file in the App Group container, readable by the Live Activity extension and App Intents. It stays local to each device (no live hand-off in v1).
 
 ### 2.6 Rendering stack
 
@@ -203,12 +209,40 @@ Budget and comfort rules (ADHD low-stimulation contract):
 - **Device tiering**: a starting quality tier is chosen at launch from device class (GPU family, display size, ProMotion), then adjusted at runtime by thermal state. iPhone starts one tier lighter than iPad: smaller thermal envelope, battery matters more, and a 6 inch canvas needs fewer particles to read as the same density. The A13 floor (iPhone 11 / SE 2nd gen) must hold 30 fps on tier 0 to 2.
 - Shader resources: Xcode compiles `.metal` files inside a package target into the module bundle (`ShaderLibrary.bundle(.module)`). Verified on device in Phase 4; fallback is moving shaders into the app target.
 
-### 2.7 Tumnus rendering approach
+### 2.7 Tumnus: character direction and rendering
 
-Your references point at two registers: the **illustrated faun** (watercolor, lamppost, umbrella, scarf) and an **abstract luminous presence** (the morphing glow bulb video, the haloed orbs). Proposed hybrid, behind a `TumnusRenderer` protocol:
+**Direction (decided): figure first.** Tumnus is what you get when the references are fused into a single faun of Narnia. He is a recognizable storybook character, not an abstract glow, rendered in the hybrid language of the moodboard. The aura stays, but as his breath and light, not as a replacement for him.
 
-1. **Aura**: a signed-distance-field metaball shader whose shape, color temperature, and breathing tempo encode mood (focused, drifting, gently concerned, cozy tea). Fully procedural, ships in Phase 4.
-2. **Figure**: a silhouette or illustrated layer with a handful of state poses, lit by the aura (rim glow, lamplight). Placeholder silhouette first; commissioned art or a Rive state machine can slot into the same protocol later without touching the mood engine.
+| Trait | Drawn from | Treatment |
+| --- | --- | --- |
+| Silhouette and costume | Watercolor lamppost faun; Lewis's own description of the faun | Slight, gentle adult faun: curly hair, small curled horns, pointed ears, shaggy goat legs, cloven hooves, long tail. Red wool scarf, umbrella, brown-paper parcels. Kind, slightly anxious eyes |
+| Linework | Fellowship poster, Moebius-style landscape, lamppost sketch | Variable-weight ink contour that goes dry and broken at the ends. Never a uniform cartoon outline |
+| Color and fill | Lamppost watercolor, the Aslan oil paintings | Transparent watercolor washes on paper grain: umber and sienna fur, vermilion scarf, indigo umbrella that turns amber where lamplight passes through it |
+| Ornament | Folk-pattern lion | Embroidered folk border on the scarf hem and waistcoat |
+| Shadow texture | Kraken engravings | Fine engraved hatching in the deepest shadows, visible only at large sizes (iPad) |
+| Light | Lamppost, magenta-beam hiker, haloed orbs | Amber key light from above, snow-blue fill, a thin neon rim (magenta or cyan) during Expeditions, a chromatic halo at his edges |
+| Presence | Morphing glow-bulb video | A soft luminous field behind him that swells, dims, and shifts temperature with his mood |
+
+He is an original faun built from these references, not a copy of any film or published illustration design.
+
+**Rendering: a layered 2D rig in SwiftUI**, behind a `TumnusRenderer` protocol:
+
+1. **Layers with pivots**: head (hair, ears, horns), eyes and brows, torso and waistcoat, scarf body and scarf tails, arms, umbrella, props (parcels, teacup), legs and hooves, tail.
+2. **Two passes per layer**: an ink line layer and a wash fill layer, so shaders treat them separately (watercolor edge darkening and paper grain on fills; a very slow line wobble on ink).
+3. **Procedural secondary motion**, all slow and low-stimulation: breathing, blinking, ear twitches, scarf and tail on damped springs, snow settling on the umbrella.
+4. **Pose set per mood state**, spring-blended between states:
+
+| Mood state | Trigger | Pose and light |
+| --- | --- | --- |
+| Waiting | Idle, no session | Under the lamppost, umbrella up, warm amber pool |
+| Expedition | Focus running | Walking ahead, umbrella as a walking stick, occasional glance back; cool forest light with a neon rim |
+| Wander | You left mid-Expedition and came back | Turns toward you, brows lifted, hand held out; aura dims and cools. Gentle, never scolding |
+| Tea Time | Rest running | Seated, teacup steaming, scarf loosened; hearth-amber aura |
+| Milestone | Expedition completed, streak day earned | Small bow with the umbrella tip; aura blooms once, then settles |
+
+5. **Scale**: full figure on iPad (the hero canvas). On iPhone, a three-quarter crop where the aura carries more of the state.
+
+**Asset pipeline**: concept sheet → line and color sheet → layered vector export (SVG or PDF per layer) → asset catalog with preserved vector data, or 3x PNG layers where painted texture matters. A faun drawn purely as code paths reads stiff, so the art needs a real drawing pass. Phase 4 sources, in order of preference for testing: (a) generated concept sheets that we then trace into layers (the Higgsfield image connector is available in this session; it spends your credits, so I will ask before using it), (b) you or an illustrator draw the sheet, (c) I hand-author stylized vector layers. The rig and the mood engine are the same whichever source fills the layers.
 
 ### 2.8 ADHD ergonomics: architectural hooks
 
@@ -234,7 +268,7 @@ Supporting iPhone costs less than it looks, because iPadOS 26 already forces us 
 - **Grid and type scale adapt as tokens**, not per-screen overrides: e.g., 12-column editorial grid on regular, 4-column on compact, with a display type scale that steps down by width. Defined in Phase 2.
 - **Orientation**: iPad supports all four. iPhone ships **portrait-only in v1**; the "propped up on the desk" use case is covered by the Live Activity in StandBy, which the system renders in landscape for free.
 - **Design lead**: iPad stays the hero canvas where the atmosphere is richest; the compact layout is a first-class design, not a squeezed iPad layout, and is reviewed on a real iPhone every phase.
-- **Cross-device continuity**: the same person may own both devices. History sync rides on the Chronicles CloudKit decision (question 8). Live hand-off of a *running* Expedition between devices is out of scope for v1.
+- **Cross-device continuity**: the same person may own both devices. History syncs through iCloud (decided, see 2.5). Live hand-off of a *running* Expedition between devices is out of scope for v1.
 
 ---
 
@@ -269,19 +303,31 @@ The audio architecture is identical on both devices. The rules below apply to iP
 | --- | --- | --- | --- |
 | **Apple MusicKit** | Yes with `audio` background mode (`ApplicationMusicPlayer`), or delegated to the Music app (`SystemMusicPlayer`) | MusicKit App Service on the App ID; `NSAppleMusicUsageDescription`; user authorization; active Apple Music subscription for catalog playback | **Primary.** Native, no quota, no ToS traps. Ambience mixing alongside `ApplicationMusicPlayer` gets verified on device in Phase 5, fallback is `SystemMusicPlayer` + Layered policy |
 | **Spotify App Remote SDK** | Yes, because audio plays inside the Spotify app, not ours | Spotify app installed; Premium. **Since Feb 2026, Development Mode requires Premium for the developer, allows one Client ID per developer, and caps authorized users at 5.** Extended quota is for established organizations. App Remote disconnects when our app backgrounds (reconnect on foreground). Developer Policy restricts combining Spotify content with other content, so we never programmatically duck or crossfade Spotify | **Not viable for a TestFlight group larger than 5.** Recommend **deep-link mode** instead: user saves a playlist link, we open it in Spotify, ambience runs Layered. Zero SDK, zero quota |
-| **YouTube IFrame API in WKWebView** | **No.** WebKit suspends web media when backgrounded, and policy forbids it | YouTube API Terms prohibit separating or isolating audio from video and background play; Required Minimum Functionality requires a **visible** embedded player at least **200 × 200 px** (480 × 270 recommended for 16:9); no overlays obscuring the player. App Review guideline 5.2.3 backs this up | **A headless or hidden WKWebView player is a ToS violation and a rejection risk. I will not build it.** Legitimate option: a visible "Screening Room" glass card (foreground only) for lofi streams, or cut YouTube |
+| **YouTube IFrame API in WKWebView** | **No.** WebKit suspends web media when backgrounded, and policy forbids it | YouTube API Terms prohibit separating or isolating audio from video and background play; Required Minimum Functionality requires a **visible** embedded player at least **200 × 200 px** (480 × 270 recommended for 16:9); no overlays obscuring the player. App Review guideline 5.2.3 backs this up | **Decided: visible Screening Room** (rules below). No headless or hidden player |
+
+### 3.4 Screening Room (decided)
+
+A glass card in the Media Hub that hosts the official YouTube IFrame player for lofi and ambient streams. Compliance is built into the component, not left to discipline:
+
+- **Size floor**: the player viewport never drops below 200 pt on either axis. On iPad the card targets 480 × 270 or larger. On iPhone the player runs edge to edge (no side margins), so even the narrowest supported iPhone (375 pt wide) gets a 211 pt tall 16:9 viewport.
+- **No overlays**: our glass chrome, grid lines, and particles stay outside the player's bounds. YouTube's own controls and branding stay intact.
+- **Foreground only**: playback pauses when the card leaves the screen, when the sheet is dismissed, and when `scenePhase` leaves `.active`. No audio-only or minimized modes.
+- **User-initiated**: no autoplay; the user presses play inside the player.
+- **Mixing**: our ambience can keep playing underneath, because both are our app's audio.
+- **Embedding**: loaded through the official IFrame API with a proper `origin` and an HTTPS base URL, since YouTube rejects embeds that arrive without a referrer.
 
 ---
 
 ## 4. Project configuration (exact)
 
-### 4.1 Identifiers (proposed, change before Phase 2)
+### 4.1 Identifiers
 
 | Item | Value |
 | --- | --- |
 | App bundle ID | `io.cairparavel.app` |
 | Live Activity extension | `io.cairparavel.app.ExpeditionActivity` |
 | App Group | `group.io.cairparavel.app` |
+| iCloud container | `iCloud.io.cairparavel.app` |
 | URL scheme | `cairparavel` |
 | Marketing version / build | `0.1.0` / `1` (CI overrides build number) |
 
@@ -348,7 +394,7 @@ targets:
 
 | Key | Value | Why |
 | --- | --- | --- |
-| `UIBackgroundModes` | `[audio]` | Ambience and MusicKit playback in background |
+| `UIBackgroundModes` | `[audio, remote-notification]` | Ambience and MusicKit playback in background; silent CloudKit pushes that trigger Chronicles sync |
 | `NSAppleMusicUsageDescription` | "Cair Paravel plays your Apple Music during Expeditions." | MusicKit authorization prompt |
 | `NSSupportsLiveActivities` | `YES` | Expedition countdown on Lock Screen, Dynamic Island, StandBy |
 | `ITSAppUsesNonExemptEncryption` | `NO` | Only system HTTPS; skips export compliance questions per upload |
@@ -368,11 +414,19 @@ targets:
 <array><string>group.io.cairparavel.app</string></array>
 <key>com.apple.developer.usernotifications.time-sensitive</key>
 <true/>
+<key>com.apple.developer.icloud-container-identifiers</key>
+<array><string>iCloud.io.cairparavel.app</string></array>
+<key>com.apple.developer.icloud-services</key>
+<array><string>CloudKit</string></array>
+<key>aps-environment</key>
+<string>development</string>
 ```
+
+`aps-environment` is required because CloudKit delivers sync changes as silent pushes. Xcode switches it to `production` automatically when exporting for TestFlight.
 
 The extension's entitlements carry the same App Group. **MusicKit is not an entitlements-file key**: it is enabled as an App Service on the App ID in the developer portal, which also provisions the developer token automatically.
 
-Deferred (add only when the feature lands): `aps-environment` (remote Live Activity pushes), `com.apple.developer.icloud-container-identifiers` + `icloud-services` (Chronicles sync), `com.apple.developer.family-controls` (requires Apple approval for distribution).
+Deferred: `com.apple.developer.family-controls` (Screen Time shielding, out of scope for v1; requires Apple approval for distribution).
 
 ### 4.5 Privacy manifest (`PrivacyInfo.xcprivacy`)
 
@@ -388,13 +442,14 @@ Deferred (add only when the feature lands): `aps-environment` (remote Live Activ
 
 ### 5.1 One-time setup (your side)
 
-1. **Apple Developer Program** membership (individual or organization; organization requires a D-U-N-S number and displays the legal entity as seller).
+1. **Apple Developer Program** membership. Your developer Apple ID has been shared with me in chat; it is deliberately not recorded in this public repository. Still needed: confirm the membership is active (paid and approved) and send the 10-character **Team ID** from developer.apple.com → Account → Membership details. The Team ID is not secret and goes into `project.yml`.
 2. **Certificates, Identifiers & Profiles**
    - Register explicit App IDs: `io.cairparavel.app`, `io.cairparavel.app.ExpeditionActivity`.
-   - Capabilities on the app ID: App Groups, Time Sensitive Notifications. App Services: **MusicKit**.
+   - Capabilities on the app ID: App Groups, Time Sensitive Notifications, **iCloud (CloudKit)** with container `iCloud.io.cairparavel.app`, Push Notifications (carries CloudKit's silent sync pushes). App Services: **MusicKit**.
    - Register the App Group `group.io.cairparavel.app`; attach it to both IDs.
 3. **App Store Connect** → Apps → New App: platform iOS, name, primary language, bundle ID `io.cairparavel.app`, SKU `CAIRPARAVEL001`. App names are globally unique and capped at 30 characters, so reserve early (see IP note in section 6).
 4. **iPhone and iPad**: enable Developer Mode on each device (Settings → Privacy & Security → Developer Mode) for local runs.
+5. **CloudKit Dashboard**: TestFlight builds talk to the CloudKit **Production** environment. Before any TestFlight build that changes the data model, deploy the schema from Development to Production, or testers' sync silently fails. This becomes a checklist item in Phase 6.
 
 ### 5.2 Signing model
 
@@ -417,9 +472,9 @@ cd "$CI_PRIMARY_REPOSITORY_PATH"
 xcodegen generate
 ```
 
-Workflow: start condition = push to `main` → Action: Archive (iOS, Release) → Post-action: TestFlight Internal Testing. Build number comes from `$CI_BUILD_NUMBER`.
+Workflow: start condition = push to `main` → Action: Archive (iOS, Release) → Post-action: TestFlight Internal Testing. Build number comes from `$CI_BUILD_NUMBER`. (Today the only branch is the working branch, which GitHub made the default; `main` is created when the first phase is merged.)
 
-**Compile gate: GitHub Actions** on every branch push: `xcodegen generate`, then `xcodebuild build -scheme CairParavel -destination 'generic/platform=iOS Simulator'` and `swift test` for `CairCore`. Note: macOS runner minutes bill at a 10x multiplier on private repositories.
+**Compile gate: GitHub Actions** on every branch push: `xcodegen generate`, then `xcodebuild build -scheme CairParavel -destination 'generic/platform=iOS Simulator'` and `swift test` for `CairCore`. The repository is public, so GitHub-hosted macOS runners cost nothing. Signing secrets (the App Store Connect `.p8` key) live only in GitHub encrypted secrets or Xcode Cloud, never in the repo.
 
 **Manual fallback: CLI**
 
@@ -466,10 +521,11 @@ Every upload needs a strictly increasing `CFBundleVersion` within a marketing ve
 
 1. **Narnia intellectual property.** "Cair Paravel", "Tumnus", Aslan, and Narnia are owned by The C.S. Lewis Company and remain under copyright and trademark protection. Internal TestFlight is unreviewed and private, so it is fine for building. External TestFlight and the App Store run through review (guideline 5.2, intellectual property), and a rights-holder complaint can pull the app. Recommendation: build with the current names behind a single `Brand` constant, and decide on original names (or a license) before external distribution.
 2. **Reference art is mood only.** The uploaded illustrations and videos are third-party copyrighted work and must not ship. Two legitimate sources that match the brief: **public-domain Romantic and Hudson River School oil paintings** (Thomas Cole, the painter behind your QUEST reference, plus Bierstadt and Church) and **Gustave Doré engravings** (your Kraken duotone reference), via CC0 open-access collections such as The Met, the National Gallery of Art, and the Smithsonian. Everything else is original or commissioned.
-3. **Font licensing.** Desktop licenses do not cover app embedding. Either OFL families or a paid app/embedding license.
+3. **Fonts: testing mode (decided).** Licensing is ignored when choosing faces, so we pick the best fit for the references. One hard rule because the repository is public: font files that are not OFL are **never committed** (that would be public redistribution). They go in a gitignored `App/Resources/Fonts/Local/` folder you fill on your Mac, with committed OFL fallbacks so the build always works. Replace or license before external TestFlight.
 4. **Spotify quota** (section 3.3): plan for deep-link mode.
-5. **YouTube** (section 3.3): no headless playback.
+5. **YouTube**: Screening Room only, visible and foreground (section 3.4).
 6. **No silent-audio keepalive** (section 2.4).
+7. **Public repository.** Everything pushed is world-readable: no secrets or API keys, no reference images, no licensed font files, no personal account details.
 
 ---
 
@@ -505,16 +561,20 @@ Every upload needs a strictly increasing `CFBundleVersion` within a marketing ve
 
 ---
 
-## 9. Open questions (defaults in bold)
+## 9. Decisions log
 
-1. **Minimum OS**: **iOS 26.0 / iPadOS 26.0**, universal iPhone + iPad?
-2. **Names / IP**: keep "Cair Paravel" and "Tumnus" **for internal TestFlight only**, with a rename decision before external testing?
-3. **Music scope**: **Apple Music (MusicKit) + Spotify deep link + owned ambience**, YouTube **cut** or kept as a visible Screening Room?
-4. **Tumnus art**: **procedural aura + placeholder silhouette now**, commissioned illustration or Rive later?
-5. **Developer account**: individual or organization, your Team ID, and is `io.cairparavel.app` acceptable as the bundle ID?
-6. **CI**: **Xcode Cloud** for TestFlight plus a GitHub Actions compile gate? Is this repository private (macOS runner cost)?
-7. **Fonts**: **OFL only** for now, or budget for commercial app licenses?
-8. **Chronicles sync**: with the app on both devices, history sync is now worth more. **CloudKit-ready schema in Phase 3, iCloud sync switched on before the first TestFlight build**, or stay local-only per device? (Note: TestFlight builds use the CloudKit *production* environment, so the schema must be deployed to production before testers can sync.)
-9. **Screen Time shielding** (Apple-approved entitlement): **out of scope** for v1?
-10. **iPhone orientation**: **portrait-only in v1**, with StandBy covering the desk-clock use case?
-11. **Design lead**: **iPad as the hero canvas**, with the compact (iPhone) layout designed as a first-class composition and reviewed on device every phase? Or should iPhone lead?
+| # | Topic | Decision | Source |
+| --- | --- | --- | --- |
+| 1 | Minimum OS | iOS 26.0 / iPadOS 26.0, universal iPhone + iPad | Default, not contested |
+| 2 | Names / IP | Keep "Cair Paravel" and "Tumnus" for internal TestFlight; revisit before external testing | Default, not contested |
+| 3 | Music scope | Apple MusicKit + Spotify deep link + owned ambience + **visible Screening Room** | You |
+| 4 | Tumnus | **Figure-first faun** fused from the references; layered 2D rig (section 2.7) | You |
+| 5 | Developer account | Apple ID received (kept out of the repo). **Pending: Team ID and confirmation that the membership is active** | You, partially |
+| 6 | CI | Xcode Cloud → TestFlight; GitHub Actions compile gate. Repo verified **public** | Default + verified |
+| 7 | Fonts | Best fit, licensing ignored for testing; non-OFL files never committed | You |
+| 8 | Chronicles sync | **iCloud (CloudKit) sync on** before the first TestFlight build | You ("yes") |
+| 9 | Screen Time shielding | Out of scope for v1 | Default, not contested |
+| 10 | iPhone orientation | Portrait-only in v1 | Default, not contested |
+| 11 | Design lead | **iPad leads** | You |
+
+Not blocking Phase 2: the Team ID. `DEVELOPMENT_TEAM` stays a placeholder until you send it, and you can still build to the simulator in the meantime.
