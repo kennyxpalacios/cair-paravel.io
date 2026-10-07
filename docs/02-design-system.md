@@ -157,6 +157,8 @@ Width ≥ 1100 pt (iPad landscape)        700 to 1099 pt (iPad portrait)        
 4. Tap the **wrench** (debug builds only) for the Workshop: flip moods, toggle the grid, and open the **Design specimen** to see every token on one screen.
 5. Try iPad landscape, portrait, and a narrow Stage Manager window, which should switch to the iPhone layout.
 
+**Without Xcode**: every push that touches the app runs the **Screenshots** workflow, which launches the app on an iPad Pro 13" and an iPhone Pro simulator in six states and attaches the PNGs to the run (Actions → Screenshots → latest run → Artifacts → `screenshots`). Debug builds accept `-CairPreviewMood lamplight|expedition|teaTime` and `-CairPreviewPanel chronicles|mediaHub` as launch arguments.
+
 ## 10. What is placeholder
 
 | Placeholder | Replaced in |
