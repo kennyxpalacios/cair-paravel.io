@@ -1,8 +1,8 @@
 # Cair Paravel
 
-A high-aesthetic, ADHD-friendly Pomodoro timer for iPad. Focus intervals are Expeditions into the wild, rest periods are Tea Time, and an ethereal faun companion, Tumnus, keeps you company.
+A high-aesthetic, ADHD-friendly Pomodoro timer for iPhone and iPad. Focus intervals are Expeditions into the wild, rest periods are Tea Time, and an ethereal faun companion, Tumnus, keeps you company.
 
-Native Swift 6 / SwiftUI, iPadOS 26+, distributed through TestFlight.
+Native Swift 6 / SwiftUI, one universal app for iOS 26+ and iPadOS 26+, distributed through TestFlight.
 
 ## Phases
 

@@ -2,6 +2,7 @@
 
 Status: **Proposed, awaiting approval**
 Date: 2026-10-07
+Revision 2: scope widened from iPad-only to a universal iPhone + iPad app (new section 2.9; updates to 1.x, 2.4, 2.6, 2.8, 3.1, 4.x, 5.x, 8, 9).
 Scope: Platform decision, module architecture, background audio and streaming constraints, project configuration, entitlements, signing, and the TestFlight pipeline. No product code ships in this phase.
 
 ---
@@ -11,7 +12,9 @@ Scope: Platform decision, module architecture, background audio and streaming co
 | Decision | Recommendation |
 | --- | --- |
 | Stack | Native **Swift 6 + SwiftUI**, built with **Xcode 26 or later** |
-| Minimum OS | **iPadOS 26.0**, iPad only (`TARGETED_DEVICE_FAMILY = 2`) |
+| Devices | **Universal: iPhone + iPad**, one binary, one bundle ID (`TARGETED_DEVICE_FAMILY = 1,2`) |
+| Minimum OS | **iOS 26.0 / iPadOS 26.0** |
+| Layout | Driven by **available space**, not device type: a compact layout (iPhone, and iPad in narrow windows) and a regular layout (iPad full screen and wide windows) |
 | Rendering | SwiftUI `MeshGradient`, `Canvas` + `TimelineView`, Metal shaders through `ShaderLibrary`, Liquid Glass (`glassEffect`). `MTKView` only if profiling demands it |
 | State | Swift Observation (`@Observable`), main-actor stores, timer engine as a pure, effect-returning state machine |
 | Persistence | SwiftData for The Chronicles (CloudKit-compatible schema), small Codable snapshot in an App Group for live session state |
@@ -38,6 +41,7 @@ Scope: Platform decision, module architecture, background audio and streaming co
 | `AVAudioSession` / `AVAudioEngine` control | Full | Native module required anyway |
 | MusicKit | Swift-native API | Native module required |
 | Live Activities / WidgetKit | Swift only | Swift extension required regardless |
+| Dynamic Island, Control Center controls, Action button, Core Haptics (iPhone) | Direct API | Native modules or Swift extensions |
 | App Intents / Focus Filters / Shortcuts | Swift only | Swift only |
 | TestFlight pipeline | Xcode Organizer, `xcodebuild`, Xcode Cloud | EAS Build + EAS Submit (very smooth) |
 | OTA updates | Not allowed for native code (TestFlight builds only) | EAS Update for JS bundles |
@@ -45,14 +49,15 @@ Scope: Platform decision, module architecture, background audio and streaming co
 
 ### 1.2 Verdict
 
-**Native SwiftUI.** React Native's real advantages (Android reach, OTA JS updates) do not apply to an iPad-only product whose identity is its rendering. Every differentiating feature in this brief (shader lighting, glass materials, background audio, MusicKit, Live Activities, Focus Filters) would require Swift native modules in an RN project anyway, so RN would add a second language and a bridge without removing any Swift.
+**Native SwiftUI.** Adding iPhone does not change the verdict: SwiftUI is already one codebase across iPhone and iPad, so React Native's only remaining advantages are Android reach and OTA JS updates. Neither applies to an Apple-only product whose identity is its rendering. Every differentiating feature in this brief (shader lighting, glass materials, background audio, MusicKit, Live Activities, Dynamic Island, Focus Filters) would require Swift native modules in an RN project anyway, so RN would add a second language and a bridge without removing any Swift. If Android ever enters scope, revisit then.
 
-### 1.3 Why iPadOS 26 as the minimum
+### 1.3 Why iOS / iPadOS 26 as the minimum
 
-- **App Store Connect requires Xcode 26 / iPadOS 26 SDK** for all uploads since April 28, 2026. Building against 26 is mandatory; deploying to 26 is a small step further.
+- **App Store Connect requires Xcode 26 / iOS 26 & iPadOS 26 SDK** for all uploads since April 28, 2026. Building against 26 is mandatory; deploying to 26 is a small step further.
 - **Liquid Glass APIs** (`glassEffect`, `GlassEffectContainer`, glass button styles) are 26+. They are the native expression of pillar 4 (frosted tactile UI) and they inherit Reduce Transparency and Increase Contrast behavior for free.
 - **New iPad windowing**: `UIRequiresFullScreen` is deprecated in iPadOS 26 and will be ignored in a future release. We design for freely resizable windows from day one, so no legacy layout paths to maintain.
-- **Live Activities on iPad Lock Screen** for the running Expedition countdown.
+- **Live Activities** on the iPad Lock Screen, and on iPhone across the Lock Screen, Dynamic Island, and StandBy.
+- **Device floor**: iOS 26 runs on iPhone 11 / iPhone SE (2nd gen) and later (A13 and up), which sets the lowest GPU tier the atmosphere must handle.
 - TestFlight audiences are self-selected; there is no long-tail install base to back-deploy to.
 
 ### 1.4 Development workflow constraint (important)
@@ -79,7 +84,7 @@ cair-paravel.io/
 │   ├── CairParavel.entitlements
 │   └── PrivacyInfo.xcprivacy
 ├── Extensions/
-│   └── ExpeditionActivity/          # Live Activity + Lock Screen widget (WidgetKit)
+│   └── ExpeditionActivity/          # WidgetKit bundle: Live Activity (Lock Screen + Dynamic Island), Start control
 ├── Packages/
 │   ├── CairCore/                    # Foundation only, Linux-testable
 │   │   ├── Sources/CairCore/
@@ -157,15 +162,15 @@ Rules: `CairCore` never imports Apple UI frameworks. Feature modules never impor
 - **Wall-clock anchors, never tick counting.** A running phase stores `startedAt`, `plannedDuration`, and accumulated pause time. Remaining time is computed on demand. The UI renders it through `TimelineView(.periodic(from:by: 1))` or `Text(timerInterval:)`. This survives suspension, termination, and reboot. On launch the controller *reconciles*: if a phase ended while the app was dead, it advances per policy and logs the Expedition with its true end time.
 - We avoid `ProcessInfo.systemUptime` / `mach_absolute_time` for persisted anchors (they reset on reboot and are Required Reason APIs). `Date` is used and negative intervals (user changed system clock) are clamped.
 
-### 2.4 What iPadOS actually lets a timer do in the background
+### 2.4 What iOS and iPadOS actually let a timer do in the background
 
-iPadOS suspends an app seconds after it leaves the foreground. There is no sanctioned way to keep a countdown "running", and we do not need one:
+Both systems suspend an app seconds after it leaves the foreground (on iPhone this is the common case: the phone gets locked and pocketed mid-Expedition). There is no sanctioned way to keep a countdown "running", and we do not need one:
 
 | Layer | Mechanism | Works when app is suspended or killed |
 | --- | --- | --- |
 | Truth | Wall-clock anchors in the snapshot | Yes |
 | Phase-end alert | `UNNotificationRequest` at the computed end time, `interruptionLevel = .timeSensitive`, custom chime (bundled, under 30 s) | Yes |
-| Glanceable countdown | Live Activity on the Lock Screen using `Text(timerInterval:)` | Yes, self-updating without app execution |
+| Glanceable countdown | Live Activity using `Text(timerInterval:)`: Lock Screen on both devices, plus Dynamic Island (compact, minimal, expanded) and StandBy on iPhone | Yes, self-updating without app execution |
 | Auto-advance chain | Pre-schedule the next few phase notifications (Expedition end, Tea Time end); cancel and rebuild on any user action. iOS allows 64 pending local notifications | Yes |
 | Live transitions | When ambience audio is playing, the `audio` background mode keeps the process alive, so the engine can transition and chime in real time | Only while audible audio plays |
 
@@ -195,6 +200,7 @@ Budget and comfort rules (ADHD low-stimulation contract):
 - Ambient layers capped at **30 fps**; ProMotion 120 Hz is reserved for direct-manipulation gestures.
 - Motion periods of 8 to 14 seconds for breathing fields. No flashes, no strobing, no hard cuts during an Expedition.
 - `accessibilityReduceMotion` → frozen composed frame. `accessibilityReduceTransparency` → opaque cards. Low Power Mode and `ProcessInfo.thermalState` step the atmosphere down a quality tier automatically.
+- **Device tiering**: a starting quality tier is chosen at launch from device class (GPU family, display size, ProMotion), then adjusted at runtime by thermal state. iPhone starts one tier lighter than iPad: smaller thermal envelope, battery matters more, and a 6 inch canvas needs fewer particles to read as the same density. The A13 floor (iPhone 11 / SE 2nd gen) must hold 30 fps on tier 0 to 2.
 - Shader resources: Xcode compiles `.metal` files inside a package target into the module bundle (`ShaderLibrary.bundle(.module)`). Verified on device in Phase 4; fallback is moving shaders into the app target.
 
 ### 2.7 Tumnus rendering approach
@@ -208,16 +214,38 @@ Your references point at two registers: the **illustrated faun** (watercolor, la
 
 - **Wander detection without surveillance**: `scenePhase` leaving `.active` during an Expedition records a wander event with duration. Tumnus reacts gently on return. Optional single "come back to the path" notification after N minutes. Nothing punitive.
 - **Transition policy is data**, not code: per-preset auto-advance rules (e.g., Expedition → Tea Time automatic, Tea Time → Expedition with a short "gather your things" grace).
-- **App Intents + Focus Filter** (`SetFocusFilterIntent`): an iPad Focus such as "Deep Work" can select a preset and silence non-essential UI. Shortcut: "Begin an Expedition".
+- **App Intents + Focus Filter** (`SetFocusFilterIntent`): a Focus such as "Deep Work" on either device can select a preset and silence non-essential UI. Shortcut: "Begin an Expedition".
+- **One-press start (zero friction)**: the same App Intent powers a Control Center / Lock Screen control (`ControlWidget`) on both devices and the Action button on iPhones that have one. Starting an Expedition never requires opening the app.
+- **Haptics as the quiet cue (iPhone)**: phase changes and wander nudges get a soft haptic signature (`sensoryFeedback`, Core Haptics for custom patterns). iPads have no Taptic Engine, so iPad relies on light and sound. Haptics are often the least overstimulating cue for ADHD users, so they are on by default on iPhone.
 - **Screen Time distraction shielding** (FamilyControls / ManagedSettings) is technically possible but the distribution entitlement requires Apple's approval. Deferred unless you want it (see questions).
+
+### 2.9 Universal layout strategy (iPhone + iPad)
+
+Supporting iPhone costs less than it looks, because iPadOS 26 already forces us to build a compact layout: an iPad window in Stage Manager or Split View can be as narrow as a phone. One adaptive shell serves both devices.
+
+- **Layout is driven by available space, never by device idiom.** Breakpoints come from the container width (`onGeometryChange`, `ViewThatFits`, `horizontalSizeClass` as a coarse hint). `userInterfaceIdiom` is used only for hardware capabilities (haptics, quality tier), never for layout.
+- **Two layout families, shared components:**
+
+| Family | Where | Structure |
+| --- | --- | --- |
+| **Compact** | iPhone (all), iPad narrow windows | Full-bleed atmosphere canvas, Tumnus and timer as the single focal column, HUD controls in a bottom glass dock, Chronicles and Media Hub as sheets |
+| **Regular** | iPad full screen, iPad wide windows | Canvas with floating HUD cards, side column for Chronicles / Media Hub (split navigation), editorial grid overlays at full density |
+
+- **Grid and type scale adapt as tokens**, not per-screen overrides: e.g., 12-column editorial grid on regular, 4-column on compact, with a display type scale that steps down by width. Defined in Phase 2.
+- **Orientation**: iPad supports all four. iPhone ships **portrait-only in v1**; the "propped up on the desk" use case is covered by the Live Activity in StandBy, which the system renders in landscape for free.
+- **Design lead**: iPad stays the hero canvas where the atmosphere is richest; the compact layout is a first-class design, not a squeezed iPad layout, and is reviewed on a real iPhone every phase.
+- **Cross-device continuity**: the same person may own both devices. History sync rides on the Chronicles CloudKit decision (question 8). Live hand-off of a *running* Expedition between devices is out of scope for v1.
 
 ---
 
-## 3. Audio: background playback and streaming sandbox rules on iPadOS
+## 3. Audio: background playback and streaming sandbox rules on iOS and iPadOS
+
+The audio architecture is identical on both devices. The rules below apply to iPhone and iPad alike.
 
 ### 3.1 Session strategy
 
 - One `AudioSessionCoordinator` owns `AVAudioSession`. Category **`.playback`** (plays in background, ignores silent mode), mode `.default`.
+- **iPhone silent mode**: `.playback` ignores the Ring/Silent switch, which is right for ambience the user explicitly started, but wrong for surprise chimes. Rule: in-app chimes play only while the user has ambience running; otherwise phase changes use the notification sound (which respects silent mode) plus haptics.
 - Two policies, switched by deactivating and reactivating the session:
 
 | Policy | Options | When | Behavior |
@@ -269,7 +297,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    TARGETED_DEVICE_FAMILY: "2"              # iPad only
+    TARGETED_DEVICE_FAMILY: "1,2"            # iPhone + iPad, one universal binary
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: YOUR_TEAM_ID
@@ -322,15 +350,16 @@ targets:
 | --- | --- | --- |
 | `UIBackgroundModes` | `[audio]` | Ambience and MusicKit playback in background |
 | `NSAppleMusicUsageDescription` | "Cair Paravel plays your Apple Music during Expeditions." | MusicKit authorization prompt |
-| `NSSupportsLiveActivities` | `YES` | Lock Screen Expedition countdown |
+| `NSSupportsLiveActivities` | `YES` | Expedition countdown on Lock Screen, Dynamic Island, StandBy |
 | `ITSAppUsesNonExemptEncryption` | `NO` | Only system HTTPS; skips export compliance questions per upload |
 | `UILaunchScreen` | `{ UIColorName: LaunchBackground, UIImageName: LaunchMark }` | Plist-based launch screen, no storyboard |
-| `UISupportedInterfaceOrientations~ipad` | all four | Landscape and portrait |
+| `UISupportedInterfaceOrientations` | `[Portrait]` | iPhone is portrait-only in v1 (see 2.9) |
+| `UISupportedInterfaceOrientations~ipad` | all four | iPad landscape and portrait |
 | `UIApplicationSceneManifest` | `UIApplicationSupportsMultipleScenes = NO` (v1) | One timer, one window. Revisit for a Chronicles side window |
 | `CFBundleURLTypes` | scheme `cairparavel` | Deep links from Live Activity, Shortcuts |
 | `LSApplicationQueriesSchemes` | `[spotify]` | Only to detect Spotify for deep-link mode |
 | `UIAppFonts` | font file list | Custom editorial typefaces |
-| `UIRequiresFullScreen` | **omit** | Deprecated in iPadOS 26. Minimum window size enforced via `UIWindowScene.sizeRestrictions` |
+| `UIRequiresFullScreen` | **omit** | Deprecated in iPadOS 26. The compact layout already handles narrow iPad windows; `UIWindowScene.sizeRestrictions` sets a floor only if testing shows we need one |
 
 ### 4.4 Entitlements (`CairParavel.entitlements`)
 
@@ -365,13 +394,13 @@ Deferred (add only when the feature lands): `aps-environment` (remote Live Activ
    - Capabilities on the app ID: App Groups, Time Sensitive Notifications. App Services: **MusicKit**.
    - Register the App Group `group.io.cairparavel.app`; attach it to both IDs.
 3. **App Store Connect** → Apps → New App: platform iOS, name, primary language, bundle ID `io.cairparavel.app`, SKU `CAIRPARAVEL001`. App names are globally unique and capped at 30 characters, so reserve early (see IP note in section 6).
-4. **iPad**: enable Developer Mode (Settings → Privacy & Security → Developer Mode) for local runs.
+4. **iPhone and iPad**: enable Developer Mode on each device (Settings → Privacy & Security → Developer Mode) for local runs.
 
 ### 5.2 Signing model
 
 | Context | Certificate | Profile | Managed by |
 | --- | --- | --- | --- |
-| Local device runs | Apple Development | Team development profile | Xcode automatic signing (registers your iPad UDID on first run) |
+| Local device runs | Apple Development | Team development profile | Xcode automatic signing (registers your iPhone and iPad UDIDs on first run) |
 | Archive → TestFlight | Apple Distribution (cloud-managed) | App Store Connect profile | Xcode Organizer or Xcode Cloud, automatic |
 | CLI / GitHub Actions | Same | Same | `-allowProvisioningUpdates` with an App Store Connect API key (`.p8`, Key ID, Issuer ID) stored as CI secrets |
 
@@ -427,6 +456,8 @@ xcodebuild -exportArchive -archivePath build/CairParavel.xcarchive \
 | Requires | Nothing extra | Test information: beta description, feedback email, privacy policy URL, review contact |
 | Build life | 90 days | 90 days |
 
+One universal build covers both devices: testers install it through the TestFlight app on their iPhone and their iPad from the same invite. App Store screenshots (not needed for TestFlight) will be required for both device classes later.
+
 Every upload needs a strictly increasing `CFBundleVersion` within a marketing version. Export compliance is answered automatically by `ITSAppUsesNonExemptEncryption = NO`. A beta-only debug HUD can be gated on `AppTransaction.shared` reporting the sandbox environment.
 
 ---
@@ -466,9 +497,9 @@ Every upload needs a strictly increasing `CFBundleVersion` within a marketing ve
 
 | Phase | Deliverable | Verification |
 | --- | --- | --- |
-| 2 | XcodeGen project, packages, tokens, glass components, responsive iPad shell | Compile gate green; you run it on device |
-| 3 | `CairCore` engine + Chronicles persistence + notifications | Engine unit tests (Linux + macOS); reconciliation tests |
-| 4 | Atmosphere tiers + Tumnus mood engine and renderer | On-device profiling (Instruments: SwiftUI, Metal System Trace) |
+| 2 | XcodeGen project, packages, tokens, glass components, adaptive shell (compact for iPhone and narrow iPad windows, regular for iPad) | Compile gate green; you run it on an iPhone and an iPad |
+| 3 | `CairCore` engine + Chronicles persistence + notifications + Live Activity (Lock Screen, Dynamic Island) + Start intent / control | Engine unit tests (Linux + macOS); reconciliation tests |
+| 4 | Atmosphere tiers + Tumnus mood engine and renderer + iPhone haptic signatures | On-device profiling on both devices, including the A13 floor (Instruments: SwiftUI, Metal System Trace) |
 | 5 | Audio coordinator, ambience engine, MusicKit, Spotify deep link | On-device background, interruption, and route tests |
 | 6 | Icon (Icon Composer `.icon`), launch screen, release scheme, Xcode Cloud → TestFlight | First internal TestFlight build installed |
 
@@ -476,12 +507,14 @@ Every upload needs a strictly increasing `CFBundleVersion` within a marketing ve
 
 ## 9. Open questions (defaults in bold)
 
-1. **Minimum OS**: **iPadOS 26.0**?
+1. **Minimum OS**: **iOS 26.0 / iPadOS 26.0**, universal iPhone + iPad?
 2. **Names / IP**: keep "Cair Paravel" and "Tumnus" **for internal TestFlight only**, with a rename decision before external testing?
 3. **Music scope**: **Apple Music (MusicKit) + Spotify deep link + owned ambience**, YouTube **cut** or kept as a visible Screening Room?
 4. **Tumnus art**: **procedural aura + placeholder silhouette now**, commissioned illustration or Rive later?
 5. **Developer account**: individual or organization, your Team ID, and is `io.cairparavel.app` acceptable as the bundle ID?
 6. **CI**: **Xcode Cloud** for TestFlight plus a GitHub Actions compile gate? Is this repository private (macOS runner cost)?
 7. **Fonts**: **OFL only** for now, or budget for commercial app licenses?
-8. **Chronicles sync**: **local-only v1** with a CloudKit-ready schema?
+8. **Chronicles sync**: with the app on both devices, history sync is now worth more. **CloudKit-ready schema in Phase 3, iCloud sync switched on before the first TestFlight build**, or stay local-only per device? (Note: TestFlight builds use the CloudKit *production* environment, so the schema must be deployed to production before testers can sync.)
 9. **Screen Time shielding** (Apple-approved entitlement): **out of scope** for v1?
+10. **iPhone orientation**: **portrait-only in v1**, with StandBy covering the desk-clock use case?
+11. **Design lead**: **iPad as the hero canvas**, with the compact (iPhone) layout designed as a first-class composition and reviewed on device every phase? Or should iPhone lead?
