@@ -1,0 +1,19 @@
+// Cair Paravel build configuration shared by Debug and Release.
+
+// Signing mode
+//   personal      free Apple ID "Personal Team" (until the paid membership is active)
+//   distribution  paid Apple Developer Program team (TestFlight, MusicKit, iCloud)
+// Switching is this one line. The .dev identifiers keep the real IDs unclaimed
+// until the paid team registers them.
+CAIR_SIGNING_MODE = personal
+
+CAIR_ID_SUFFIX_personal = .dev
+CAIR_ID_SUFFIX_distribution =
+CAIR_ID_SUFFIX = $(CAIR_ID_SUFFIX_$(CAIR_SIGNING_MODE))
+
+CAIR_BUNDLE_ID = io.cairparavel.app$(CAIR_ID_SUFFIX)
+CAIR_APP_GROUP = group.io.cairparavel.app$(CAIR_ID_SUFFIX)
+
+// DEVELOPMENT_TEAM lives in a gitignored local file. Copy
+// Signing.local.xcconfig.example to Signing.local.xcconfig and fill it in.
+#include? "Signing.local.xcconfig"

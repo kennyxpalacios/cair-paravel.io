@@ -1,0 +1,7 @@
+// Local signing settings. Copy this file to Signing.local.xcconfig (gitignored).
+//
+// To find your Team ID: open the project in Xcode, select the CairParavel target,
+// pick your team under Signing & Capabilities, then look at Build Settings →
+// Development Team. Paste the 10-character value below so it survives
+// `xcodegen generate`.
+DEVELOPMENT_TEAM =

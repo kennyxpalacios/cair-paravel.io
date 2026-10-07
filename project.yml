@@ -1,0 +1,54 @@
+# XcodeGen spec: the source of truth for CairParavel.xcodeproj (which is generated and gitignored).
+# Regenerate after pulling: `xcodegen generate` (or run scripts/bootstrap.sh).
+name: CairParavel
+
+configFiles:
+  Debug: Config/App.xcconfig
+  Release: Config/App.xcconfig
+
+options:
+  bundleIdPrefix: io.cairparavel
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+
+packages:
+  CairKit:
+    path: Packages/CairKit
+
+targets:
+  CairParavel:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    settings:
+      base:
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_NAME: CairParavel
+        PRODUCT_BUNDLE_IDENTIFIER: $(CAIR_BUNDLE_ID)
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+    dependencies:
+      - package: CairKit
+        product: DesignSystem
+    scheme:
+      gatherCoverageData: false
