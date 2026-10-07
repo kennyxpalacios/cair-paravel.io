@@ -3,6 +3,7 @@
 Status: **Decisions recorded (Revision 3), awaiting explicit go for Phase 2**
 Date: 2026-10-07
 Revision 2: scope widened from iPad-only to a universal iPhone + iPad app (new section 2.9; updates to 1.x, 2.4, 2.6, 2.8, 3.1, 4.x, 5.x, 8, 9).
+Revision 4: pre-membership mode until the Apple Developer Program membership activates on Oct 15 (section 5.5).
 Revision 3: decisions recorded (section 9). Screening Room kept, figure-first Tumnus direction (2.7), iCloud sync on (2.5, 4.x, 5.x), iPad leads design, public-repo rules (6).
 Scope: Platform decision, module architecture, background audio and streaming constraints, project configuration, entitlements, signing, and the TestFlight pipeline. No product code ships in this phase.
 
@@ -515,6 +516,35 @@ One universal build covers both devices: testers install it through the TestFlig
 
 Every upload needs a strictly increasing `CFBundleVersion` within a marketing version. Export compliance is answered automatically by `ITSAppUsesNonExemptEncryption = NO`. A beta-only debug HUD can be gated on `AppTransaction.shared` reporting the sandbox environment.
 
+### 5.5 Before the membership activates (until Oct 15)
+
+The paid membership is only required for TestFlight, App Store Connect, MusicKit, and the production iCloud container. Everything else runs today:
+
+| Need | Works without the paid membership? | How |
+| --- | --- | --- |
+| Build and run in the iOS Simulator (iPhone and iPad) | Yes | No account at all; Xcode with any Apple ID or none |
+| Run on your own iPhone and iPad | Yes | Free Apple ID added in Xcode → Settings → Accounts creates a "Personal Team". Limits: profiles expire after 7 days (press Run again to re-sign), a few free-provisioned apps per device, no distribution |
+| Compile gate on GitHub Actions | Yes | Simulator builds need no signing (`CODE_SIGNING_ALLOWED=NO`) |
+| Background audio, Live Activities, notifications, App Intents, haptics | Yes | Info.plist and local APIs |
+| App Groups, Time Sensitive Notifications | Listed by Apple as available to free accounts | Kept on in personal mode; the code already falls back if Xcode refuses either |
+| iCloud sync | Off until Oct 15 (our choice) | iCloud container IDs are permanent and bound to the team that creates them, so `iCloud.io.cairparavel.app` is created once, under the paid team. Until then The Chronicles are local-only; SwiftData's `.automatic` CloudKit mode syncs only when the entitlement exists, so the same code runs in both modes |
+| MusicKit | No | It is an App Service configured in the paid developer portal. Lands with Phase 5 after Oct 15 |
+| TestFlight / App Store Connect | No | Phase 6, after Oct 15 |
+
+**Two signing modes**, selected in `Config/Signing.xcconfig` (Phase 2):
+
+| Setting | Personal (now) | Distribution (after Oct 15) |
+| --- | --- | --- |
+| `DEVELOPMENT_TEAM` | your Personal Team ID (gitignored local file) | paid Team ID |
+| Bundle ID | `io.cairparavel.app.dev` | `io.cairparavel.app` |
+| App Group | `group.io.cairparavel.app.dev` | `group.io.cairparavel.app` |
+| Entitlements | App Groups, Time Sensitive | + iCloud (CloudKit), `aps-environment` |
+| MusicKit | hidden in the UI | enabled |
+
+The `.dev` identifiers keep the real IDs unclaimed, so the paid team can register them cleanly. Switching modes is a one-line change; no code changes.
+
+**Requirement**: a Mac that runs Xcode 26. Everything above assumes one.
+
 ---
 
 ## 6. Risks and flags
@@ -569,7 +599,7 @@ Every upload needs a strictly increasing `CFBundleVersion` within a marketing ve
 | 2 | Names / IP | Keep "Cair Paravel" and "Tumnus" for internal TestFlight; revisit before external testing | Default, not contested |
 | 3 | Music scope | Apple MusicKit + Spotify deep link + owned ambience + **visible Screening Room** | You |
 | 4 | Tumnus | **Figure-first faun** fused from the references; layered 2D rig (section 2.7) | You |
-| 5 | Developer account | Apple ID received (kept out of the repo). **Pending: Team ID and confirmation that the membership is active** | You, partially |
+| 5 | Developer account | Apple ID received (kept out of the repo). Paid membership activates **Oct 15**; until then, Personal signing mode (section 5.5). Paid Team ID needed on Oct 15 | You |
 | 6 | CI | Xcode Cloud → TestFlight; GitHub Actions compile gate. Repo verified **public** | Default + verified |
 | 7 | Fonts | Best fit, licensing ignored for testing; non-OFL files never committed | You |
 | 8 | Chronicles sync | **iCloud (CloudKit) sync on** before the first TestFlight build | You ("yes") |
@@ -577,4 +607,4 @@ Every upload needs a strictly increasing `CFBundleVersion` within a marketing ve
 | 10 | iPhone orientation | Portrait-only in v1 | Default, not contested |
 | 11 | Design lead | **iPad leads** | You |
 
-Not blocking Phase 2: the Team ID. `DEVELOPMENT_TEAM` stays a placeholder until you send it, and you can still build to the simulator in the meantime.
+Not blocking Phases 2 to 4: the membership. Personal mode covers simulator and on-device runs; MusicKit, iCloud sync, and TestFlight switch on after Oct 15.
