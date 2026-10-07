@@ -23,7 +23,7 @@ The Xcode project is generated from `project.yml`. After every pull, run `./scri
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | [Architecture, stack & TestFlight pipeline](docs/01-architecture-stack-testflight.md) | Approved |
-| 2 | [Design tokens & layout scaffolding](docs/02-design-system.md) | Built, awaiting review |
+| 2 | [Design tokens & layout scaffolding](docs/02-design-system.md) | Built (CI green), awaiting your review |
 | 3 | Core timer engine & state management | Not started |
 | 4 | Ambient atmosphere, lighting & Tumnus agent states | Not started |
 | 5 | Media hub & audio integration | Not started |
