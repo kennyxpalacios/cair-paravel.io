@@ -1,0 +1,55 @@
+name: Screenshots
+
+on:
+  push:
+    paths:
+      - "App/**"
+      - "Packages/**"
+      - "project.yml"
+      - "scripts/ci-screenshots.sh"
+      - ".github/workflows/screenshots.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Simulator screenshots (iPad + iPhone)
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select newest stable Xcode 26 or later
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | grep -vi -e beta -e rc | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CairParavel.xcodeproj \
+            -scheme CairParavel \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet 2>&1 | tee build.log
+
+      - name: Capture screenshots
+        run: scripts/ci-screenshots.sh build/Build/Products/Debug-iphonesimulator/CairParavel.app shots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/*.png
+          retention-days: 30

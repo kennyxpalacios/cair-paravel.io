@@ -1,4 +1,5 @@
 import DesignSystem
+import Foundation
 import Observation
 
 nonisolated enum Panel: String, CaseIterable, Identifiable {
@@ -31,6 +32,21 @@ final class ShellModel {
     var panel: Panel?
     var showsGrid = true
     var showsWorkshop = false
+
+    init() {
+        #if DEBUG
+        // Launch arguments for screenshots and review, e.g.
+        // `-CairPreviewMood expedition -CairPreviewPanel chronicles`.
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: "CairPreviewMood"), let mood = AtmosphereMood(rawValue: raw) {
+            self.mood = mood
+            isRunning = mood != .lamplight
+        }
+        if let raw = defaults.string(forKey: "CairPreviewPanel"), let panel = Panel(rawValue: raw) {
+            self.panel = panel
+        }
+        #endif
+    }
 
     /// Static countdown values per mood, for layout review only.
     var previewSeconds: Int {
